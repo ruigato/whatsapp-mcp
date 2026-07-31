@@ -201,7 +201,7 @@ type SendMessageRequest struct {
 	Recipient string   `json:"recipient"`
 	Message   string   `json:"message"`
 	MediaPath string   `json:"media_path,omitempty"`
-	Mentions  []string `json:"mentions,omitempty"` // JIDs to @mention (e.g. 3519...@s.whatsapp.net)
+	Mentions  []string `json:"mentions,omitempty"` // JIDs to @mention (e.g. <user-jid>)
 }
 
 // Function to send a WhatsApp message

@@ -119,6 +119,10 @@ This application consists of two main components:
 - All message history is stored in a SQLite database within the `whatsapp-bridge/store/` directory
 - The database maintains tables for chats and messages
 - Messages are indexed for efficient searching and retrieval
+- `store/`, local backups, downloaded media, logs, credentials and compiled
+  binaries are excluded from Git. Before publishing, run
+  `scripts/check-public-safety.sh`; this clone also enables the versioned
+  `.githooks/pre-push` gate.
 
 ## Usage
 
