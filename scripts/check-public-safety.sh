@@ -49,16 +49,28 @@ scan_tracked \
 
 range="${1:-}"
 if [[ -n "$range" ]]; then
-  non_private_emails="$(
-    git log --format='%ae%n%ce' "$range" |
-      sort -u |
-      grep -Ev '^[0-9]+\+ruigato@users\.noreply\.github\.com$' || true
-  )"
-  if [[ -n "$non_private_emails" ]]; then
-    printf 'Blocked non-noreply commit email in %s:\n%s\n' \
-      "$range" "$non_private_emails" >&2
-    failed=1
+  upstream_ref=""
+  if git rev-parse --verify upstream/main >/dev/null 2>&1; then
+    upstream_ref="upstream/main"
   fi
+
+  while IFS= read -r commit; do
+    if [[ -n "$upstream_ref" ]] &&
+      git merge-base --is-ancestor "$commit" "$upstream_ref"; then
+      continue
+    fi
+
+    non_private_emails="$(
+      git show -s --format='%ae%n%ce' "$commit" |
+        sort -u |
+        grep -Ev '^[0-9]+\+ruigato@users\.noreply\.github\.com$' || true
+    )"
+    if [[ -n "$non_private_emails" ]]; then
+      printf 'Blocked non-noreply commit email in %s (%s):\n%s\n' \
+        "$range" "$commit" "$non_private_emails" >&2
+      failed=1
+    fi
+  done < <(git rev-list "$range")
 fi
 
 if [[ "$failed" -ne 0 ]]; then
