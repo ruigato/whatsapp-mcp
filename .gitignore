@@ -1,3 +1,19 @@
 *.db
+*.sqlite
+*.sqlite3
+*.log
+*.pem
+*.key
+.env
+.env.*
+!.env.example
+
 claude_desktop_config.json
 whatsapp.log
+
+# Local WhatsApp account state, message databases and downloaded personal media.
+whatsapp-bridge/store/
+whatsapp-bridge/store.bak.*/
+
+# Locally compiled bridge binary.
+whatsapp-bridge/whatsapp-bridge
