@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
@@ -91,6 +92,11 @@ func NewMessageStore() (*MessageStore, error) {
 		return nil, fmt.Errorf("failed to create tables: %v", err)
 	}
 
+	if err := ensureVoiceNoteSchema(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	return &MessageStore{db: db}, nil
 }
 
@@ -110,17 +116,17 @@ func (store *MessageStore) StoreChat(jid, name string, lastMessageTime time.Time
 
 // Store a message in the database
 func (store *MessageStore) StoreMessage(id, chatJID, sender, content string, timestamp time.Time, isFromMe bool,
-	mediaType, filename, url string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64) error {
+	mediaType, filename, url string, mediaKey, fileSHA256, fileEncSHA256 []byte, fileLength uint64, isVoiceNote *bool) error {
 	// Only store if there's actual content or media
 	if content == "" && mediaType == "" {
 		return nil
 	}
 
 	_, err := store.db.Exec(
-		`INSERT OR REPLACE INTO messages 
-		(id, chat_jid, sender, content, timestamp, is_from_me, media_type, filename, url, media_key, file_sha256, file_enc_sha256, file_length) 
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		id, chatJID, sender, content, timestamp, isFromMe, mediaType, filename, url, mediaKey, fileSHA256, fileEncSHA256, fileLength,
+		`INSERT OR REPLACE INTO messages
+		(id, chat_jid, sender, content, timestamp, is_from_me, media_type, filename, url, media_key, file_sha256, file_enc_sha256, file_length, is_voice_note)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, chatJID, sender, content, timestamp, isFromMe, mediaType, filename, url, mediaKey, fileSHA256, fileEncSHA256, fileLength, isVoiceNote,
 	)
 	return err
 }
@@ -464,6 +470,7 @@ func handleMessage(client *whatsmeow.Client, messageStore *MessageStore, msg *ev
 		fileSHA256,
 		fileEncSHA256,
 		fileLength,
+		voiceNoteFlag(msg.Message),
 	)
 
 	if err != nil {
@@ -598,6 +605,12 @@ func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, message
 	// Check if this is a media message
 	if mediaType == "" {
 		return false, "", "", "", fmt.Errorf("not a media message")
+	}
+
+	// Audio filenames previously used wall-clock seconds and could collide.
+	// Use message identity, including for old rows, to never reuse another audio.
+	if mediaType == "audio" {
+		filename = fmt.Sprintf("audio_%x.ogg", sha256.Sum256([]byte(chatJID+"\x00"+messageID)))
 	}
 
 	// Create directory for the chat if it doesn't exist
@@ -1135,6 +1148,7 @@ func handleHistorySync(client *whatsmeow.Client, messageStore *MessageStore, his
 					fileSHA256,
 					fileEncSHA256,
 					fileLength,
+					voiceNoteFlag(msg.Message.Message),
 				)
 				if err != nil {
 					logger.Warnf("Failed to store history message: %v", err)
